@@ -1,8 +1,10 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.0;
+import "./Ticket.sol";
+import "@openzeppelin/contracts/token/ERC20/ERC20.sol";
 
-// Authors: @dB2510 @xenowits
-contract Booking {
+/// @author @dB2510 @xenowits
+contract Booking is Ticket {
     // Assumption: Train moves from A -> B and doesn't stop at any intermediate stations
     // Also, there is no delay
     struct Train {
@@ -12,13 +14,16 @@ contract Booking {
         string source;
         string destination;
         bool isRunning; // true if train is active, false if it's cancelled
-        // add arrivalTime & DepartureTime
+        // TODO: add arrivalTime & DepartureTime
     }
 
-    event Booked(uint32 trainNo, address passenger);
+    event Booked(uint32 trainNo, address passenger, uint256 ticketId);
 
     // trainNo is the index of trains array
     Train[] public trains;
+
+    /// mapping from ticketId to trainNo
+    mapping(uint256 => uint32) ticketIdToTrainNo;
 
     constructor() {
         addNewTrain(250, 120, "A", "B");
@@ -43,6 +48,7 @@ contract Booking {
         returns (Train[] memory)
     {
         Train[] memory output = new Train[](trains.length);
+        uint256 j = 0;
         for (uint256 i = 0; i < trains.length; i++) {
             if (
                 isTrainAvailable(
@@ -52,7 +58,7 @@ contract Booking {
                     destination
                 )
             ) {
-                output[i] = trains[i];
+                output[j++] = trains[i];
             }
         }
         return output;
@@ -76,13 +82,26 @@ contract Booking {
             keccak256(abi.encodePacked(passenger_destination));
     }
 
-    function bookTicket(uint32 trainNo) public payable {
+    /// @param trainNo Train Number
+    /// @param ticketMetadataURI IPFS Metadata URI from web3
+    /// @return ticketId TicketId for the booked ticket
+    function bookTicket(uint32 trainNo, string memory ticketMetadataURI)
+        public
+        payable
+        returns (uint256 ticketId)
+    {
         require(msg.value >= trains[trainNo].fare);
         require(trains[trainNo].availableSeats > 0);
         trains[trainNo].availableSeats--;
-        emit Booked(trainNo, msg.sender);
+        ticketId = generateTicket(msg.sender, ticketMetadataURI);
+        ticketIdToTrainNo[ticketId] = trainNo;
+        emit Booked(trainNo, msg.sender, ticketId);
     }
 
+    /// @param availableSeats Seats Available
+    /// @param fare Train's Fare
+    /// @param source Train's Source
+    /// @param destination Train's Destination
     function addNewTrain(
         uint32 availableSeats,
         uint256 fare,
@@ -101,11 +120,45 @@ contract Booking {
         );
     }
 
-    function updateTrain(uint32 trainNo, uint256 newFare, bool changeRunningStatus) internal {
+    /// @notice Update train details
+    /// @param trainNo Train Number
+    /// @param newFare New Fare
+    /// @param changeRunningStatus To change Running Status
+    function updateTrain(
+        uint32 trainNo,
+        uint256 newFare,
+        bool changeRunningStatus
+    ) internal {
         require(trainNo < trains.length);
         trains[trainNo].fare = newFare;
-        if (changeRunningStatus) {   
+        if (changeRunningStatus) {
             trains[trainNo].isRunning = !trains[trainNo].isRunning;
         }
+    }
+
+    /// @param ticketId TicketId for which cancellation needs to be carried out
+    /// @param trainNo TrainNo on
+    /// @return True if booking cancellation is successful, false otherwise
+    function cancelBooking(uint256 ticketId, uint256 trainNo)
+        public
+        returns (bool)
+    {
+        require(ownerOf(ticketId) == msg.sender);
+        trains[trainNo].availableSeats++;
+        require(cancelTicket(ticketId));
+        require(refundFunds(ticketId));
+        return true;
+    }
+
+    /// @notice Refund funds back to the passenger's wallet
+    /// @param ticketId Ticket Id to refund
+    /// @return True if refunded successfully
+    function refundFunds(uint256 ticketId) private returns (bool) {
+        ticketStatus[ticketId] = Status.REFUNDED;
+        address payable passengerWalletAddress = payable(msg.sender);
+        passengerWalletAddress.transfer(
+            trains[ticketIdToTrainNo[ticketId]].fare
+        );
+        return true;
     }
 }

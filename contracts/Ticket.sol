@@ -4,8 +4,10 @@ pragma solidity ^0.8.0;
 import "@openzeppelin/contracts/token/ERC721/extensions/ERC721URIStorage.sol";
 import "@openzeppelin/contracts/token/ERC721/ERC721.sol";
 import "@openzeppelin/contracts/utils/Counters.sol";
+import "./Booking.sol";
 
-// Authors: @xenowits @dB2510
+/// @author @xenowits @dB2510
+/// @title Ticket for train bookings
 contract Ticket is ERC721URIStorage {
     using Counters for Counters.Counter;
     Counters.Counter private _ticketIds;
@@ -20,35 +22,30 @@ contract Ticket is ERC721URIStorage {
     }
 
     /// mapping from ticketId to Status of the ticket
-    mapping(uint => Status) ticketStatus;
+    mapping(uint256 => Status) ticketStatus;
 
     /// @notice Generates a ticket in the form of an NFT
     /// @param passenger Address of the passenger who booking the ticket
     /// @param ticketMetadataURI Ticket details from web3js
-    /// @return ticketId 
-    function generateTicket(address passenger, string memory ticketMetadataURI) internal returns (uint256) {
+    /// @return ticketId
+    function generateTicket(address passenger, string memory ticketMetadataURI)
+        internal
+        returns (uint256)
+    {
         _ticketIds.increment();
-        uint newTicketId = _ticketIds.current();
-
+        uint256 newTicketId = _ticketIds.current();
         _safeMint(passenger, newTicketId);
 
         // set ticketMetadataURI as ipfs metadata URL
         _setTokenURI(newTicketId, ticketMetadataURI);
-
         return newTicketId;
     }
-    
+
+    /// @param ticketId Ticket Id to cancel
+    /// @return True if cancelled successfully
     function cancelTicket(uint256 ticketId) internal returns (bool) {
         require(_exists(ticketId));
         ticketStatus[ticketId] = Status.CANCELLED;
-        require(refundTicket(ticketId));
         return true;
     }
-
-    function refundTicket(uint256 ticketId) private returns (bool) {
-        ticketStatus[ticketId] = Status.REFUNDED;
-        // logic for safe transfer of funds back to the passenger's wallet
-        return true;
-    }
-
 }
