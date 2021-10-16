@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.0;
 
+// Authors: @dB2510 @xenowits
 contract Booking {
     // Assumption: Train moves from A -> B and doesn't stop at any intermediate stations
     // Also, there is no delay
@@ -10,6 +11,7 @@ contract Booking {
         uint256 fare; // fare in gwei
         string source;
         string destination;
+        bool isRunning; // true if train is active, false if it's cancelled
         // add arrivalTime & DepartureTime
     }
 
@@ -19,16 +21,16 @@ contract Booking {
     Train[] public trains;
 
     constructor() {
-        trains.push(Train(0, 250, 120, "A", "B"));
-        trains.push(Train(1, 251, 121, "A", "C"));
-        trains.push(Train(2, 252, 122, "A", "D"));
-        trains.push(Train(3, 253, 123, "A", "E"));
-        trains.push(Train(4, 254, 124, "B", "C"));
-        trains.push(Train(5, 255, 125, "B", "D"));
-        trains.push(Train(6, 256, 126, "B", "E"));
-        trains.push(Train(7, 257, 127, "C", "D"));
-        trains.push(Train(8, 258, 128, "C", "E"));
-        trains.push(Train(9, 259, 129, "D", "E"));
+        addNewTrain(250, 120, "A", "B");
+        addNewTrain(251, 121, "A", "C");
+        addNewTrain(252, 122, "A", "D");
+        addNewTrain(253, 123, "A", "E");
+        addNewTrain(254, 124, "B", "C");
+        addNewTrain(255, 125, "B", "D");
+        addNewTrain(256, 126, "B", "E");
+        addNewTrain(257, 127, "C", "D");
+        addNewTrain(258, 128, "C", "E");
+        addNewTrain(259, 129, "D", "E");
     }
 
     /// @notice Searches train from a given source to destination
@@ -42,7 +44,14 @@ contract Booking {
     {
         Train[] memory output = new Train[](trains.length);
         for (uint256 i = 0; i < trains.length; i++) {
-            if (isTrainAvailable(trains[i].source, trains[i].destination, source, destination)) {
+            if (
+                isTrainAvailable(
+                    trains[i].source,
+                    trains[i].destination,
+                    source,
+                    destination
+                )
+            ) {
                 output[i] = trains[i];
             }
         }
@@ -61,7 +70,7 @@ contract Booking {
         string memory passenger_destination
     ) internal pure returns (bool) {
         return
-            keccak256(abi.encodePacked(train_source)) == 
+            keccak256(abi.encodePacked(train_source)) ==
             keccak256(abi.encodePacked(passenger_source)) &&
             keccak256(abi.encodePacked(train_destination)) ==
             keccak256(abi.encodePacked(passenger_destination));
@@ -72,5 +81,31 @@ contract Booking {
         require(trains[trainNo].availableSeats > 0);
         trains[trainNo].availableSeats--;
         emit Booked(trainNo, msg.sender);
+    }
+
+    function addNewTrain(
+        uint32 availableSeats,
+        uint256 fare,
+        string memory source,
+        string memory destination
+    ) internal {
+        trains.push(
+            Train(
+                uint32(trains.length),
+                availableSeats,
+                fare,
+                source,
+                destination,
+                true
+            )
+        );
+    }
+
+    function updateTrain(uint32 trainNo, uint256 newFare, bool changeRunningStatus) internal {
+        require(trainNo < trains.length);
+        trains[trainNo].fare = newFare;
+        if (changeRunningStatus) {   
+            trains[trainNo].isRunning = !trains[trainNo].isRunning;
+        }
     }
 }
